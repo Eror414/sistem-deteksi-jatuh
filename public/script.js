@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-// Your Firebase project configuration
+// Firebase config
 const firebaseConfig = {
     apiKey: "AIzaSyCGSYIgHMEhrJ5WHhI7qNhlAAdMvYkZ2Yw",
     authDomain: "deteksi-jatuh-1d9f1.firebaseapp.com",
@@ -12,240 +12,172 @@ const firebaseConfig = {
     measurementId: "G-JRXT54C1HL"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
-const dataRef = database.ref('data'); // Sesuaikan dengan path data Anda di Firebase
+const dataRef = database.ref('data');
 
-// Initialize Leaflet Map
-// Set view ke lokasi default yang lebih relevan untuk Indonesia atau area proyek Anda
-let map = L.map('map').setView([-7.6302, 110.5309], 15); 
-// Inisialisasi marker di lokasi default
-let marker = L.marker([-7.6302, 110.5309]).addTo(map); 
+// Leaflet map
+let map = L.map('map').setView([-7.6302, 110.5309], 15);
+let marker = L.marker([-7.6302, 110.5309]).addTo(map);
+
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// Get reference to the new button and display elements
 const clearStatusButton = document.getElementById('clear-status-button');
-const deviceIdEl = document.getElementById('device-id');
-const timestampEl = document.getElementById('timestamp');
-const statusMessageEl = document.getElementById('status-message');
-const latitudeEl = document.getElementById('latitude');
-const longitudeEl = document.getElementById('longitude');
 
-// --- PENTING: Pengecekan elemen HTML di awal ---
-// Jika ada elemen yang tidak ditemukan, akan ada error di console dan script mungkin tidak berfungsi penuh
-if (!deviceIdEl || !timestampEl || !statusMessageEl || !latitudeEl || !longitudeEl || !clearStatusButton) {
-    console.error("Kesalahan: Satu atau lebih elemen HTML yang diperlukan tidak ditemukan di index.html!");
-    // Ini adalah masalah serius. Pastikan ID di index.html sudah sesuai!
-    alert("Aplikasi tidak dapat berfungsi dengan baik karena elemen HTML tidak lengkap. Cek konsol.");
-}
-
-// Helper function to display 'no data' state or default reset state
-function displayNoDataState() {
-    deviceIdEl.textContent = '-';
-    timestampEl.textContent = '-';
-    statusMessageEl.textContent = 'Aman'; // Default ke 'Aman' saat tidak ada data
-    latitudeEl.textContent = '-';
-    longitudeEl.textContent = '-';
-    statusMessageEl.style.color = '#28a745'; // Hijau untuk 'Aman'
-    marker.setLatLng([0,0]); // Reset marker ke 0,0
-    map.setView([0,0], 2); // Reset tampilan peta ke global
-    clearStatusButton.style.display = 'none'; // Sembunyikan tombol
-    console.log("UI diatur ke 'Tidak ada data' atau kondisi default 'Aman'.");
-}
-
-
-// Fungsi untuk memperbarui UI dengan data terbaru
 function updateUI(data) {
-    // Pastikan elemen HTML ada sebelum mencoba mengaksesnya
+    const deviceIdEl = document.getElementById('device-id');
+    const timestampEl = document.getElementById('timestamp');
+    const statusMessageEl = document.getElementById('status-message');
+    const latitudeEl = document.getElementById('latitude');
+    const longitudeEl = document.getElementById('longitude');
+
     if (!deviceIdEl || !timestampEl || !statusMessageEl || !latitudeEl || !longitudeEl || !clearStatusButton) {
-        console.error("Elemen HTML tidak lengkap, update UI dibatalkan.");
+        console.error("One or more required HTML elements not found!");
         return;
     }
 
     if (data) {
-        // Temukan entri data terbaru berdasarkan timestamp
-        const latestEntryKey = Object.keys(data).sort((a, b) => {
-            const timeA = data[a] && data[a].timestamp ? new Date(data[a].timestamp).getTime() : 0;
-            const timeB = data[b] && data[b].timestamp ? new Date(data[b].timestamp).getTime() : 0;
-            return timeB - timeA; // Urutan menurun untuk mendapatkan yang terbaru
-        })[0];
+        const validEntries = Object.entries(data).filter(([_, value]) =>
+            value && value.device_id && value.status && value.timestamp
+        );
 
-        const latestData = data[latestEntryKey];
+        if (validEntries.length === 0) {
+            deviceIdEl.textContent = '-';
+            timestampEl.textContent = '-';
+            statusMessageEl.textContent = 'Tidak ada data';
+            latitudeEl.textContent = '-';
+            longitudeEl.textContent = '-';
+            statusMessageEl.style.color = '#e74c3c';
+            marker.setLatLng([0, 0]);
+            map.setView([0, 0], 2);
+            clearStatusButton.style.display = 'none';
+            return;
+        }
 
-        // --- Logika pembaruan UI utama ---
-        if (latestData) {
-            // console.log("updateUI dipanggil. Data terbaru yang terdeteksi:", latestData); // Debug log
+        validEntries.sort((a, b) => {
+            const timeA = new Date(a[1].timestamp.replace(' ', 'T')).getTime();
+            const timeB = new Date(b[1].timestamp.replace(' ', 'T')).getTime();
+            return timeB - timeA;
+        });
 
-            // Perubahan penting: Logika reset "ResetUI" sekarang lebih terintegrasi dalam pembaruan UI normal
-            // Ini akan memastikan data "ResetUI" tetap bisa memicu reset jika datang dari Firebase
-            // (Meskipun tombol "Berikan Pertolongan" sudah melakukan reset langsung)
-            if (latestData.status === "Aman" && latestData.device_id === "ResetUI") {
-                // console.log("Data 'ResetUI' terdeteksi dari Firebase.");
-                displayNoDataState(); // Gunakan fungsi helper untuk reset ke kondisi aman/default
-                return; // Berhenti di sini, tidak perlu memproses data lainnya
-            }
+        const latestData = validEntries[0][1];
 
-            // --- Pembaruan Teks Data ---
-            deviceIdEl.textContent = latestData.device_id || '-';
-
-            // Format timestamp menjadi lebih mudah dibaca
-            const dateObj = latestData.timestamp ? new Date(latestData.timestamp) : null;
-            if (dateObj && !isNaN(dateObj.getTime())) { // Pastikan tanggal valid
-                timestampEl.textContent = dateObj.toLocaleString();
-            } else {
-                timestampEl.textContent = '-';
-            }
-            
-            statusMessageEl.textContent = latestData.status || 'Tidak ada data';
-            
-            // Perbaikan penting: Konversi lat/lng ke float dan validasi
-            const lat = parseFloat(latestData.latitude);
-            const lng = parseFloat(latestData.longitude);
-
-            latitudeEl.textContent = !isNaN(lat) ? lat.toFixed(6) : '-';
-            longitudeEl.textContent = !isNaN(lng) ? lng.toFixed(6) : '-';
-
-            // --- Pembaruan Peta ---
-            // Hanya update peta jika lat/lng adalah angka valid dan tidak (0,0) (kecuali jika 0,0 adalah lokasi valid)
-            if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0) && map) { 
-                const newLatLng = new L.LatLng(lat, lng);
-                marker.setLatLng(newLatLng);
-                map.setView(newLatLng, 15); // Sesuaikan tingkat zoom sesuai kebutuhan
-            } else {
-                console.warn("Data latitude atau longitude tidak valid atau (0,0). Mengatur ulang tampilan peta.");
-                marker.setLatLng([0,0]); // Reset marker ke 0,0
-                map.setView([0,0], 2); // Reset tampilan peta ke global
-            }
-
-            // --- Perubahan Warna Status dan Tampilan Tombol ---
-            if (latestData.status === "Jatuh Terdeteksi") {
-                statusMessageEl.style.color = '#e74c3c'; // Merah
-                clearStatusButton.style.display = 'block'; // Tampilkan tombol
-            } else {
-                statusMessageEl.style.color = '#28a745'; // Hijau untuk status normal atau lainnya
-                clearStatusButton.style.display = 'none'; // Sembunyikan tombol
-            }
-            
-            // raw_fall_data_string diabaikan di sini karena tidak ada elemen UI untuk menampilkannya.
-            // Tidak perlu ada penanganan khusus untuk 'mengabaikan' field ini.
-            // console.log("Raw Fall Data (ignored for display):", latestData.raw_fall_data_string); // Jika Anda ingin melihatnya di konsol
+        if (latestData.status === "Aman" && latestData.device_id === "ResetUI") {
+            deviceIdEl.textContent = '-';
+            timestampEl.textContent = '-';
+            statusMessageEl.textContent = 'Aman';
+            latitudeEl.textContent = '-';
+            longitudeEl.textContent = '-';
+            statusMessageEl.style.color = '#28a745';
+            clearStatusButton.style.display = 'none';
+            marker.setLatLng([0, 0]);
+            map.setView([0, 0], 2);
         } else {
-            console.warn("latestData null setelah sorting.");
-            displayNoDataState();
+            deviceIdEl.textContent = latestData.device_id || '-';
+            timestampEl.textContent = latestData.timestamp || '-';
+            statusMessageEl.textContent = latestData.status || 'Tidak ada data';
+            latitudeEl.textContent = latestData.latitude !== undefined ? latestData.latitude.toFixed(6) : '-';
+            longitudeEl.textContent = latestData.longitude !== undefined ? latestData.longitude.toFixed(6) : '-';
+
+            if (latestData.latitude !== undefined && latestData.longitude !== undefined &&
+                latestData.latitude !== 0 && latestData.longitude !== 0) {
+                const newLatLng = new L.LatLng(latestData.latitude, latestData.longitude);
+                marker.setLatLng(newLatLng);
+                map.setView(newLatLng, 15);
+            } else {
+                marker.setLatLng([0, 0]);
+                map.setView([0, 0], 2);
+            }
+
+            if (latestData.status === "Jatuh Terdeteksi") {
+                statusMessageEl.style.color = '#e74c3c';
+                clearStatusButton.style.display = 'block';
+            } else {
+                statusMessageEl.style.color = '#28a745';
+                clearStatusButton.style.display = 'none';
+            }
         }
 
     } else {
-        console.log("Tidak ada data di Firebase Realtime Database.");
-        displayNoDataState();
+        deviceIdEl.textContent = '-';
+        timestampEl.textContent = '-';
+        statusMessageEl.textContent = 'Tidak ada data';
+        latitudeEl.textContent = '-';
+        longitudeEl.textContent = '-';
+        statusMessageEl.style.color = '#e74c3c';
+        marker.setLatLng([0, 0]);
+        map.setView([0, 0], 2);
+        clearStatusButton.style.display = 'none';
     }
 }
 
-
-// Listener untuk perubahan data dari Firebase (menggunakan 'value' untuk pembaruan real-time)
+// Realtime listener
 dataRef.on('value', (snapshot) => {
     const data = snapshot.val();
-    updateUI(data); // Panggil updateUI setiap kali ada perubahan data di Firebase
+    updateUI(data);
 }, (errorObject) => {
-    console.error('Pembacaan data dari Firebase gagal: ' + errorObject.code);
-    displayNoDataState(); // Atur UI ke 'tidak ada data' jika ada error
+    console.error('The read failed: ' + errorObject.code);
+    updateUI(null);
 });
 
-// Event listener untuk tombol refresh (sekarang tidak terlalu diperlukan karena real-time)
+// Refresh button
 document.getElementById('refresh-button').addEventListener('click', () => {
-    console.log("Tombol refresh diklik. Data seharusnya diperbarui secara otomatis jika ada perubahan di Firebase.");
-    // Anda bisa memicu updateUI secara manual di sini jika diperlukan, tapi 'value' listener sudah cukup.
-    // dataRef.once('value', (snapshot) => {
-    //     const data = snapshot.val();
-    //     updateUI(data);
-    // });
+    console.log("Refresh button clicked.");
 });
 
-// Event listener untuk tombol "Berikan Pertolongan"
+// Button "Berikan Pertolongan"
 clearStatusButton.addEventListener('click', () => {
     const now = new Date();
-    const timestamp = now.toISOString(); // Format ISO untuk konsistensi
-
+    const timestamp = now.toISOString();
     const safeDataEntry = {
-        device_id: 'ResetUI', // Penanda khusus untuk UI
+        device_id: 'ResetUI',
         timestamp: timestamp,
-        status: 'Aman',
-        latitude: 0, // Sertakan latitude
-        longitude: 0, // Sertakan longitude
-        raw_fall_data_string: '' // Sertakan field baru agar struktur konsisten
+        status: 'Aman'
     };
 
-    // --- LANGKAH PENTING: Langsung reset UI di sini tanpa menunggu Firebase ---
-    // Ini memastikan respons instan saat tombol diklik.
-    if (deviceIdEl && timestampEl && statusMessageEl && latitudeEl && longitudeEl && clearStatusButton) {
-        deviceIdEl.textContent = '-';
-        timestampEl.textContent = '-';
-        statusMessageEl.textContent = 'Aman';
-        latitudeEl.textContent = '-';
-        longitudeEl.textContent = '-';
-        statusMessageEl.style.color = '#28a745'; // Hijau
-        clearStatusButton.style.display = 'none';
-        
-        // Pindahkan marker dan atur view map ke posisi default 0,0
-        marker.setLatLng([0,0]); 
-        map.setView([0,0], 2); // Atur peta ke tampilan global
-        console.log("UI langsung direset setelah tombol 'Berikan Pertolongan' diklik.");
-    } else {
-        console.error("Elemen HTML tidak ditemukan saat mencoba reset UI langsung.");
-    }
-
-    // --- LANGKAH 2: Tetap kirim data 'Aman' ke Firebase untuk pencatatan/log ---
     dataRef.push(safeDataEntry)
         .then(() => {
-            console.log("Status 'Aman' (ResetUI) berhasil dikirim ke Firebase.");
-            // UI akan otomatis terupdate jika ada data lain yang datang,
-            // tapi reset utamanya sudah dilakukan di atas.
+            console.log("Status 'Aman' berhasil dikirim.");
         })
         .catch((error) => {
-            console.error("Gagal mengirim status reset ke Firebase: ", error);
-            alert("Gagal memperbarui status. Periksa koneksi atau izin Firebase.");
+            console.error("Gagal memperbarui status:", error);
+            alert("Gagal memperbarui status. Periksa koneksi.");
         });
 });
 
-// --- Bagian Push Notification (tetap sama) ---
-const messaging = firebase.messaging(); 
+// Push Notification Setup
+const messaging = firebase.messaging();
 
 function requestPermissionAndGetToken() {
-    console.log('Meminta izin notifikasi...');
     Notification.requestPermission().then((permission) => {
         if (permission === 'granted') {
-            console.log('Izin notifikasi diberikan.');
             return messaging.getToken();
         } else {
-            console.warn('Gagal mendapatkan izin notifikasi.');
             return Promise.reject('Izin notifikasi ditolak.');
         }
     }).then((currentToken) => {
         if (currentToken) {
-            console.log('FCM registration token:', currentToken);
             saveMessagingDeviceToken(currentToken);
-        } else {
-            console.warn('Tidak ada FCM registration token. Minta izin untuk membuatnya.');
         }
     }).catch((err) => {
-        console.error('Terjadi error saat mendapatkan token: ', err);
+        console.error('Token error:', err);
     });
 }
 
 function saveMessagingDeviceToken(currentToken) {
     database.ref('/fcmTokens/' + currentToken).set(true)
         .then(() => {
-            console.log('FCM token berhasil disimpan ke database.');
+            console.log('FCM token disimpan.');
         })
         .catch((error) => {
-            console.error('Error saat menyimpan FCM token ke database:', error);
+            console.error('Error simpan FCM token:', error);
         });
 }
 
 messaging.onMessage((payload) => {
-    console.log('[script.js] Menerima pesan foreground ', payload);
+    console.log('[script.js] Pesan foreground:', payload);
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
@@ -257,13 +189,12 @@ messaging.onMessage((payload) => {
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./firebase-messaging-sw.js')
         .then((registration) => {
-            console.log('Service Worker berhasil didaftarkan dengan scope:', registration.scope);
             messaging.useServiceWorker(registration);
             requestPermissionAndGetToken();
         })
         .catch((err) => {
-            console.error('Pendaftaran Service Worker gagal:', err);
+            console.error('SW gagal didaftarkan:', err);
         });
 } else {
-    console.warn('Browser ini tidak mendukung Service Worker.');
+    console.warn('Service Worker tidak didukung.');
 }
