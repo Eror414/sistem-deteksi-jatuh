@@ -39,20 +39,15 @@ function updateUI(data) {
     }
 
     if (data) {
-        const validEntries = Object.entries(data).filter(([_, value]) =>
-            value && value.device_id && value.status && value.timestamp
-        );
+        const validEntries = Object.entries(data).filter(([_, value]) => {
+            return value &&
+                typeof value.device_id === 'string' &&
+                typeof value.status === 'string' &&
+                typeof value.timestamp === 'string';
+        });
 
         if (validEntries.length === 0) {
-            deviceIdEl.textContent = '-';
-            timestampEl.textContent = '-';
-            statusMessageEl.textContent = 'Tidak ada data';
-            latitudeEl.textContent = '-';
-            longitudeEl.textContent = '-';
-            statusMessageEl.style.color = '#e74c3c';
-            marker.setLatLng([0, 0]);
-            map.setView([0, 0], 2);
-            clearStatusButton.style.display = 'none';
+            updateUI(null);
             return;
         }
 
@@ -64,6 +59,7 @@ function updateUI(data) {
 
         const latestData = validEntries[0][1];
 
+        // Handle reset UI
         if (latestData.status === "Aman" && latestData.device_id === "ResetUI") {
             deviceIdEl.textContent = '-';
             timestampEl.textContent = '-';
@@ -74,30 +70,32 @@ function updateUI(data) {
             clearStatusButton.style.display = 'none';
             marker.setLatLng([0, 0]);
             map.setView([0, 0], 2);
+            return;
+        }
+
+        // Normal data
+        deviceIdEl.textContent = latestData.device_id || '-';
+        timestampEl.textContent = latestData.timestamp || '-';
+        statusMessageEl.textContent = latestData.status || 'Tidak ada data';
+        latitudeEl.textContent = latestData.latitude !== undefined ? latestData.latitude.toFixed(6) : '-';
+        longitudeEl.textContent = latestData.longitude !== undefined ? latestData.longitude.toFixed(6) : '-';
+
+        if (latestData.latitude !== undefined && latestData.longitude !== undefined &&
+            latestData.latitude !== 0 && latestData.longitude !== 0) {
+            const newLatLng = new L.LatLng(latestData.latitude, latestData.longitude);
+            marker.setLatLng(newLatLng);
+            map.setView(newLatLng, 15);
         } else {
-            deviceIdEl.textContent = latestData.device_id || '-';
-            timestampEl.textContent = latestData.timestamp || '-';
-            statusMessageEl.textContent = latestData.status || 'Tidak ada data';
-            latitudeEl.textContent = latestData.latitude !== undefined ? latestData.latitude.toFixed(6) : '-';
-            longitudeEl.textContent = latestData.longitude !== undefined ? latestData.longitude.toFixed(6) : '-';
+            marker.setLatLng([0, 0]);
+            map.setView([0, 0], 2);
+        }
 
-            if (latestData.latitude !== undefined && latestData.longitude !== undefined &&
-                latestData.latitude !== 0 && latestData.longitude !== 0) {
-                const newLatLng = new L.LatLng(latestData.latitude, latestData.longitude);
-                marker.setLatLng(newLatLng);
-                map.setView(newLatLng, 15);
-            } else {
-                marker.setLatLng([0, 0]);
-                map.setView([0, 0], 2);
-            }
-
-            if (latestData.status === "Jatuh Terdeteksi") {
-                statusMessageEl.style.color = '#e74c3c';
-                clearStatusButton.style.display = 'block';
-            } else {
-                statusMessageEl.style.color = '#28a745';
-                clearStatusButton.style.display = 'none';
-            }
+        if (latestData.status === "Jatuh Terdeteksi") {
+            statusMessageEl.style.color = '#e74c3c';
+            clearStatusButton.style.display = 'block';
+        } else {
+            statusMessageEl.style.color = '#28a745';
+            clearStatusButton.style.display = 'none';
         }
 
     } else {
@@ -113,7 +111,7 @@ function updateUI(data) {
     }
 }
 
-// Realtime listener
+// Listen real-time
 dataRef.on('value', (snapshot) => {
     const data = snapshot.val();
     updateUI(data);
@@ -122,12 +120,12 @@ dataRef.on('value', (snapshot) => {
     updateUI(null);
 });
 
-// Refresh button
+// Tombol refresh manual
 document.getElementById('refresh-button').addEventListener('click', () => {
     console.log("Refresh button clicked.");
 });
 
-// Button "Berikan Pertolongan"
+// Tombol Berikan Pertolongan
 clearStatusButton.addEventListener('click', () => {
     const now = new Date();
     const timestamp = now.toISOString();
@@ -147,7 +145,7 @@ clearStatusButton.addEventListener('click', () => {
         });
 });
 
-// Push Notification Setup
+// Notifikasi
 const messaging = firebase.messaging();
 
 function requestPermissionAndGetToken() {
@@ -186,6 +184,7 @@ messaging.onMessage((payload) => {
     new Notification(notificationTitle, notificationOptions);
 });
 
+// Service Worker
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./firebase-messaging-sw.js')
         .then((registration) => {
