@@ -18,8 +18,10 @@ const database = firebase.database();
 const dataRef = database.ref('data'); // Sesuaikan dengan path data Anda di Firebase
 
 // Initialize Leaflet Map
-let map = L.map('map').setView([-7.6302, 110.5309], 15);
-let marker = L.marker([-7.6302, 110.5309]).addTo(map); // Biarkan ini untuk marker default awal
+// Set view ke lokasi default yang lebih relevan untuk Indonesia atau area proyek Anda
+let map = L.map('map').setView([-7.6302, 110.5309], 15); 
+// Inisialisasi marker di lokasi default
+let marker = L.marker([-7.6302, 110.5309]).addTo(map); 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
@@ -36,8 +38,22 @@ const longitudeEl = document.getElementById('longitude');
 // Jika ada elemen yang tidak ditemukan, akan ada error di console dan script mungkin tidak berfungsi penuh
 if (!deviceIdEl || !timestampEl || !statusMessageEl || !latitudeEl || !longitudeEl || !clearStatusButton) {
     console.error("Kesalahan: Satu atau lebih elemen HTML yang diperlukan tidak ditemukan di index.html!");
-    // Anda bisa menambahkan alert di sini atau mengubah UI untuk memberi tahu pengguna
-    // alert("Aplikasi tidak dapat berfungsi dengan baik karena elemen HTML tidak lengkap.");
+    // Ini adalah masalah serius. Pastikan ID di index.html sudah sesuai!
+    alert("Aplikasi tidak dapat berfungsi dengan baik karena elemen HTML tidak lengkap. Cek konsol.");
+}
+
+// Helper function to display 'no data' state or default reset state
+function displayNoDataState() {
+    deviceIdEl.textContent = '-';
+    timestampEl.textContent = '-';
+    statusMessageEl.textContent = 'Aman'; // Default ke 'Aman' saat tidak ada data
+    latitudeEl.textContent = '-';
+    longitudeEl.textContent = '-';
+    statusMessageEl.style.color = '#28a745'; // Hijau untuk 'Aman'
+    marker.setLatLng([0,0]); // Reset marker ke 0,0
+    map.setView([0,0], 2); // Reset tampilan peta ke global
+    clearStatusButton.style.display = 'none'; // Sembunyikan tombol
+    console.log("UI diatur ke 'Tidak ada data' atau kondisi default 'Aman'.");
 }
 
 
@@ -51,7 +67,6 @@ function updateUI(data) {
 
     if (data) {
         // Temukan entri data terbaru berdasarkan timestamp
-        // Perbaikan: Pastikan entry dan timestamp ada sebelum diakses
         const latestEntryKey = Object.keys(data).sort((a, b) => {
             const timeA = data[a] && data[a].timestamp ? new Date(data[a].timestamp).getTime() : 0;
             const timeB = data[b] && data[b].timestamp ? new Date(data[b].timestamp).getTime() : 0;
@@ -59,25 +74,20 @@ function updateUI(data) {
         })[0];
 
         const latestData = data[latestEntryKey];
-        // console.log("updateUI dipanggil. Data terbaru yang terdeteksi:", latestData); // Debug log (bisa di-komen setelah berhasil)
 
-        // --- Logika untuk status "Aman" dari tombol "Berikan Pertolongan" (Reset UI) ---
-        // Catatan: Logika ini sekarang lebih relevan untuk data 'ResetUI' yang datang dari sumber lain
-        // atau sebagai fallback, karena reset utama dilakukan langsung di event listener tombol.
-        if (latestData && latestData.status === "Aman" && latestData.device_id === "ResetUI") {
-            // console.log("Kondisi reset terpenuhi (dari data Firebase)! Melakukan reset UI."); // Debug log
-            deviceIdEl.textContent = '-';
-            timestampEl.textContent = '-';
-            statusMessageEl.textContent = 'Aman';
-            latitudeEl.textContent = '-';
-            longitudeEl.textContent = '-';
-            statusMessageEl.style.color = '#28a745'; // Hijau
-            clearStatusButton.style.display = 'none';
+        // --- Logika pembaruan UI utama ---
+        if (latestData) {
+            // console.log("updateUI dipanggil. Data terbaru yang terdeteksi:", latestData); // Debug log
 
-            marker.setLatLng([0,0]); // Pindahkan marker ke 0,0
-            map.setView([0,0], 2); // Atur peta ke tampilan global
-        } else if (latestData) { // Jika ada data terbaru dan bukan data reset UI
-            // console.log("Kondisi reset TIDAK terpenuhi. Memperbarui UI dengan data normal."); // Debug log
+            // Perubahan penting: Logika reset "ResetUI" sekarang lebih terintegrasi dalam pembaruan UI normal
+            // Ini akan memastikan data "ResetUI" tetap bisa memicu reset jika datang dari Firebase
+            // (Meskipun tombol "Berikan Pertolongan" sudah melakukan reset langsung)
+            if (latestData.status === "Aman" && latestData.device_id === "ResetUI") {
+                // console.log("Data 'ResetUI' terdeteksi dari Firebase.");
+                displayNoDataState(); // Gunakan fungsi helper untuk reset ke kondisi aman/default
+                return; // Berhenti di sini, tidak perlu memproses data lainnya
+            }
+
             // --- Pembaruan Teks Data ---
             deviceIdEl.textContent = latestData.device_id || '-';
 
@@ -100,7 +110,6 @@ function updateUI(data) {
 
             // --- Pembaruan Peta ---
             // Hanya update peta jika lat/lng adalah angka valid dan tidak (0,0) (kecuali jika 0,0 adalah lokasi valid)
-            // Memastikan kedua koordinat adalah angka dan setidaknya salah satunya bukan 0 jika kita ingin menghindari default 0,0
             if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0) && map) { 
                 const newLatLng = new L.LatLng(lat, lng);
                 marker.setLatLng(newLatLng);
@@ -119,30 +128,19 @@ function updateUI(data) {
                 statusMessageEl.style.color = '#28a745'; // Hijau untuk status normal atau lainnya
                 clearStatusButton.style.display = 'none'; // Sembunyikan tombol
             }
+            
+            // raw_fall_data_string diabaikan di sini karena tidak ada elemen UI untuk menampilkannya.
+            // Tidak perlu ada penanganan khusus untuk 'mengabaikan' field ini.
+            // console.log("Raw Fall Data (ignored for display):", latestData.raw_fall_data_string); // Jika Anda ingin melihatnya di konsol
         } else {
-            // Jika latestData null atau tidak valid setelah ditemukan key
-            console.warn("latestData tidak valid setelah sorting.");
+            console.warn("latestData null setelah sorting.");
             displayNoDataState();
         }
 
     } else {
-        // Jika tidak ada data sama sekali di Firebase
         console.log("Tidak ada data di Firebase Realtime Database.");
         displayNoDataState();
     }
-}
-
-// Helper function to display 'no data' state
-function displayNoDataState() {
-    deviceIdEl.textContent = '-';
-    timestampEl.textContent = '-';
-    statusMessageEl.textContent = 'Tidak ada data';
-    latitudeEl.textContent = '-';
-    longitudeEl.textContent = '-';
-    statusMessageEl.style.color = '#e74c3c'; // Warna merah untuk 'tidak ada data'
-    marker.setLatLng([0,0]);
-    map.setView([0,0], 2);
-    clearStatusButton.style.display = 'none';
 }
 
 
@@ -158,6 +156,11 @@ dataRef.on('value', (snapshot) => {
 // Event listener untuk tombol refresh (sekarang tidak terlalu diperlukan karena real-time)
 document.getElementById('refresh-button').addEventListener('click', () => {
     console.log("Tombol refresh diklik. Data seharusnya diperbarui secara otomatis jika ada perubahan di Firebase.");
+    // Anda bisa memicu updateUI secara manual di sini jika diperlukan, tapi 'value' listener sudah cukup.
+    // dataRef.once('value', (snapshot) => {
+    //     const data = snapshot.val();
+    //     updateUI(data);
+    // });
 });
 
 // Event listener untuk tombol "Berikan Pertolongan"
@@ -175,6 +178,7 @@ clearStatusButton.addEventListener('click', () => {
     };
 
     // --- LANGKAH PENTING: Langsung reset UI di sini tanpa menunggu Firebase ---
+    // Ini memastikan respons instan saat tombol diklik.
     if (deviceIdEl && timestampEl && statusMessageEl && latitudeEl && longitudeEl && clearStatusButton) {
         deviceIdEl.textContent = '-';
         timestampEl.textContent = '-';
@@ -192,34 +196,28 @@ clearStatusButton.addEventListener('click', () => {
         console.error("Elemen HTML tidak ditemukan saat mencoba reset UI langsung.");
     }
 
-
-    // --- LANGKAH 2: Tetap kirim data 'Aman' ke Firebase untuk pencatatan ---
+    // --- LANGKAH 2: Tetap kirim data 'Aman' ke Firebase untuk pencatatan/log ---
     dataRef.push(safeDataEntry)
         .then(() => {
-            console.log("Status 'Aman' dengan reset UI berhasil dikirim ke Firebase.");
+            console.log("Status 'Aman' (ResetUI) berhasil dikirim ke Firebase.");
             // UI akan otomatis terupdate jika ada data lain yang datang,
             // tapi reset utamanya sudah dilakukan di atas.
         })
         .catch((error) => {
             console.error("Gagal mengirim status reset ke Firebase: ", error);
             alert("Gagal memperbarui status. Periksa koneksi atau izin Firebase.");
-            // Jika push ke Firebase gagal, Anda mungkin ingin mengembalikan UI ke kondisi sebelumnya
-            // atau memberi tahu pengguna.
         });
 });
 
-// --- Bagian Push Notification ---
-// Pastikan library Firebase Messaging sudah dimuat di index.html Anda
-// <script src="https://www.gstatic.com/firebasejs/X.X.X/firebase-messaging.js"></script>
+// --- Bagian Push Notification (tetap sama) ---
 const messaging = firebase.messaging(); 
 
-// Fungsi untuk meminta izin notifikasi dan mendapatkan token FCM
 function requestPermissionAndGetToken() {
     console.log('Meminta izin notifikasi...');
     Notification.requestPermission().then((permission) => {
         if (permission === 'granted') {
             console.log('Izin notifikasi diberikan.');
-            return messaging.getToken(); // Dapatkan FCM registration token
+            return messaging.getToken();
         } else {
             console.warn('Gagal mendapatkan izin notifikasi.');
             return Promise.reject('Izin notifikasi ditolak.');
@@ -227,7 +225,7 @@ function requestPermissionAndGetToken() {
     }).then((currentToken) => {
         if (currentToken) {
             console.log('FCM registration token:', currentToken);
-            saveMessagingDeviceToken(currentToken); // Simpan token ke Realtime Database
+            saveMessagingDeviceToken(currentToken);
         } else {
             console.warn('Tidak ada FCM registration token. Minta izin untuk membuatnya.');
         }
@@ -236,7 +234,6 @@ function requestPermissionAndGetToken() {
     });
 }
 
-// Fungsi untuk menyimpan token ke Firebase Realtime Database
 function saveMessagingDeviceToken(currentToken) {
     database.ref('/fcmTokens/' + currentToken).set(true)
         .then(() => {
@@ -247,18 +244,16 @@ function saveMessagingDeviceToken(currentToken) {
         });
 }
 
-// Tangani pesan foreground (ketika aplikasi web sedang aktif dan terbuka)
 messaging.onMessage((payload) => {
     console.log('[script.js] Menerima pesan foreground ', payload);
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
         body: payload.notification.body,
-        icon: '/images/firebase-logo.png' // Pastikan path ikon benar
+        icon: '/images/firebase-logo.png'
     };
     new Notification(notificationTitle, notificationOptions);
 });
 
-// Daftarkan Service Worker dan panggil fungsi requestPermissionAndGetToken()
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./firebase-messaging-sw.js')
         .then((registration) => {
