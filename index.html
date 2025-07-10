@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Deteksi Jatuh</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>SISTEM DETEKSI JATUH</h1>
+        <div id="map"></div> 
+        <div class="data-display">
+            <div>Device: <span id="device-id">-</span></div>
+            <div>Update: <span id="timestamp">-</span></div>
+            <div>Status: <span id="status-message">Tidak ada data</span></div>
+            <div>Lat: <span id="latitude">-</span>, Lng: <span id="longitude">-</span></div>
+        </div>
+        <button id="refresh-button">Refresh Data</button>
+        <button id="clear-status-button" style="display: none; margin-top: 10px;">Berikan Pertolongan</button> 
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-messaging-compat.js"></script> 
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
