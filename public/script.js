@@ -59,10 +59,13 @@ function updateUI(data) {
         })[0];
 
         const latestData = data[latestEntryKey];
+        // console.log("updateUI dipanggil. Data terbaru yang terdeteksi:", latestData); // Debug log (bisa di-komen setelah berhasil)
 
         // --- Logika untuk status "Aman" dari tombol "Berikan Pertolongan" (Reset UI) ---
-        // Catatan: Ini adalah logika khusus yang Anda implementasikan.
+        // Catatan: Logika ini sekarang lebih relevan untuk data 'ResetUI' yang datang dari sumber lain
+        // atau sebagai fallback, karena reset utama dilakukan langsung di event listener tombol.
         if (latestData && latestData.status === "Aman" && latestData.device_id === "ResetUI") {
+            // console.log("Kondisi reset terpenuhi (dari data Firebase)! Melakukan reset UI."); // Debug log
             deviceIdEl.textContent = '-';
             timestampEl.textContent = '-';
             statusMessageEl.textContent = 'Aman';
@@ -74,6 +77,7 @@ function updateUI(data) {
             marker.setLatLng([0,0]); // Pindahkan marker ke 0,0
             map.setView([0,0], 2); // Atur peta ke tampilan global
         } else if (latestData) { // Jika ada data terbaru dan bukan data reset UI
+            // console.log("Kondisi reset TIDAK terpenuhi. Memperbarui UI dengan data normal."); // Debug log
             // --- Pembaruan Teks Data ---
             deviceIdEl.textContent = latestData.device_id || '-';
 
@@ -170,14 +174,37 @@ clearStatusButton.addEventListener('click', () => {
         raw_fall_data_string: '' // Sertakan field baru agar struktur konsisten
     };
 
+    // --- LANGKAH PENTING: Langsung reset UI di sini tanpa menunggu Firebase ---
+    if (deviceIdEl && timestampEl && statusMessageEl && latitudeEl && longitudeEl && clearStatusButton) {
+        deviceIdEl.textContent = '-';
+        timestampEl.textContent = '-';
+        statusMessageEl.textContent = 'Aman';
+        latitudeEl.textContent = '-';
+        longitudeEl.textContent = '-';
+        statusMessageEl.style.color = '#28a745'; // Hijau
+        clearStatusButton.style.display = 'none';
+        
+        // Pindahkan marker dan atur view map ke posisi default 0,0
+        marker.setLatLng([0,0]); 
+        map.setView([0,0], 2); // Atur peta ke tampilan global
+        console.log("UI langsung direset setelah tombol 'Berikan Pertolongan' diklik.");
+    } else {
+        console.error("Elemen HTML tidak ditemukan saat mencoba reset UI langsung.");
+    }
+
+
+    // --- LANGKAH 2: Tetap kirim data 'Aman' ke Firebase untuk pencatatan ---
     dataRef.push(safeDataEntry)
         .then(() => {
             console.log("Status 'Aman' dengan reset UI berhasil dikirim ke Firebase.");
-            // UI akan otomatis terupdate karena dataRef.on('value')
+            // UI akan otomatis terupdate jika ada data lain yang datang,
+            // tapi reset utamanya sudah dilakukan di atas.
         })
         .catch((error) => {
             console.error("Gagal mengirim status reset ke Firebase: ", error);
             alert("Gagal memperbarui status. Periksa koneksi atau izin Firebase.");
+            // Jika push ke Firebase gagal, Anda mungkin ingin mengembalikan UI ke kondisi sebelumnya
+            // atau memberi tahu pengguna.
         });
 });
 
